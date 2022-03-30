@@ -1,0 +1,58 @@
+---
+title: "STAT650 Final Exam (fixed version)"
+author: "Xinyi Lu"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+For the final, I work with a [Game of Thrones repository](https://github.com/jeffreylancaster/game-of-thrones) to work more on lists.
+
+1.  Show the first 5 rows of a table of this Game of Thrones dataset in a tibble format.  You should remove the following columns:  "characterLink", "actorName", "actorLink", "characterImageThumb", "characterImageFull", "servedBy", "serves", "kingsguard", "guardedBy", "actors", "guardianOf", "allies", "abductedBy", "abducted", "sibling". 
+
+```{r, message=FALSE, warning=FALSE}
+require(pacman) 
+p_load(jsonlite, tidyverse, kableExtra, DT)
+```
+
+```{r}
+GOT <- fromJSON("https://github.com/jeffreylancaster/game-of-thrones/raw/master/data/characters.json")
+
+GOT <- map_df(GOT, ~as_tibble(.)) %>%
+    select(-c("characterLink", "actorName", "actorLink", "characterImageThumb", "characterImageFull", "servedBy", "serves", "kingsguard", "guardedBy", "actors", "guardianOf", "allies", "abductedBy", "abducted", "sibling"))
+
+GOT[1:5, ]
+```
+2.  Filter the dataset to only those who have killed someone.  Show the first 5 rows of the filtered dataset.  How many such individuals are there?
+
+```{r}
+killers <- GOT %>% filter(!map_lgl(killed, is.null)) %>% 
+  group_by(characterName) %>% 
+  mutate(number_killed = sapply(killed, length), killed = paste(unlist(killed),collapse=", "), houseName = paste(unlist(houseName), collapse=", "), parents = paste(unlist(parents), collapse=", "), siblings = paste(unlist(siblings), collapse=", "), killedBy = paste(unlist(killedBy), collapse=", "), parentOf = paste(unlist(parentOf), collapse=", "), marriedEngaged = paste(unlist(marriedEngaged), collapse=", "))
+
+killers[1:5, ]
+```
+```{r}
+cat("There are", nrow(killers), "killers in the filtered dataset.")
+```
+
+3.  Who were the most prolific killers? Create a tibble table of those who have killed people along with how many they killed and who they killed.  Sort the list, in descending order, by who killed the most people.
+
+```{r}
+killers2 <- killers %>% 
+    select(characterName, number_killed, killed) %>% 
+    arrange(desc(number_killed))
+
+killers2
+```
+
+Daenerys Targaryen and Sandor Clegane are the most prolific killers. They all killed 16 people.
+
+```{r}
+cat(killers2$characterName[1],"killed 16 people:", killers2$killed[1], ".")
+```
+```{r}
+cat(killers2$characterName[2],"killed 16 people:", killers2$killed[2], ".")
+```
+
+
+
