@@ -1,0 +1,321 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+### Xinyi Lu
+### Project
+### Stat650 - 01
+
+```{r, message=FALSE}
+library(nycflights13)
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(ggplot2)
+glimpse(flights)
+```
+
+\newpage
+### Part I
+### 1. The US Government website Airline On-Time Performance Data is where the data can be downloaded. What government agency hosts this website and how can you download the data? Download the data for the Bay Area airports, SFO, OAK, SJC available months in 2020. Try to download the same columns as in the flights data frame in nycflights13. Can you do this? If not, what can you download? What must be done to produce the same variables and data for the Bay Area airports?
+
+Yes, I can download the same columns as in flights data frame in nycflights13. Something must be done: download and combine 12 months csv files to one, as beloved "combo.csv", then filter out all the useless columns, change variables name to the same name of nycflights13's flights, mutate the hour, minute, and time_hour columns.
+```{r}
+combo <- read.csv("combo.csv")
+head(combo)
+```
+
+```{r}
+combo1 <- combo %>%
+  filter(ORIGIN == "OAK" | ORIGIN =="SFO" | ORIGIN =="SJC" ) %>%
+  select(-c(ORIGIN_CITY_NAME, DEST_CITY_NAME,X.1,FL_DATE, X))%>%
+  rename(year=YEAR, month=MONTH, day=DAY_OF_MONTH, carrier=OP_UNIQUE_CARRIER, tailnum= TAIL_NUM, origin=ORIGIN, dest=DEST,
+         sched_dep_time=CRS_DEP_TIME,
+         dep_time=DEP_TIME, dep_delay=DEP_DELAY, sched_arr_time=CRS_ARR_TIME, arr_time= ARR_TIME, arr_delay=ARR_DELAY,
+         air_time=AIR_TIME, distance=DISTANCE, flight=FLIGHTS) 
+glimpse(combo1)
+```
+
+
+```{r}
+combo1$sched_dep_time <- as.character(combo1$sched_dep_time)
+head(combo1)
+```
+
+```{r}
+combo2 <-combo1 %>%
+  filter(nchar(sched_dep_time)==3)%>%
+  mutate(hour =str_extract(sched_dep_time, "^\\d{1}"), 
+         minute = substr(sched_dep_time, 2,3))
+```
+
+```{r}
+combo3 <- combo1 %>%
+  filter(nchar(sched_dep_time)==4) %>%
+  mutate(hour =str_extract(sched_dep_time, "^\\d{2}"), 
+         minute = substr(sched_dep_time, 3,4))
+```
+
+
+```{r, warning=FALSE}
+combo1 <- combo2 %>%
+  rbind(combo3) %>%
+  mutate(time_hour = paste(year, month, day, hour, minute)) %>%
+  mutate(time_hour = ymd_hm(time_hour))
+```
+
+
+```{r}
+combo1 <- combo1 %>%
+  mutate(sched_dep_time= as.integer(sched_dep_time),
+  dep_time = as.integer(dep_time),
+  sched_arr_time = as.integer(sched_arr_time),
+  arr_time = as.integer(arr_time))
+glimpse(combo1)
+```
+
+\newpage
+### 2. Now use the anyflights R package (also available through CRAN) to create the same data frames in the nycflights13 data set, but for the Bay Area airports in 2020. Name the dataset baflights20. Currently the anyflights package has some open issues on Github, so the function to download the data does not work on all platforms (this might have been fixed in version 0.3.1).  Run the fs::dir_ls("data") command to see that the files are in the data subdirectory. 
+
+When I wanna use my own R studio to run the codes belove:
+library(anyflights)
+airports20 <- get_airports()
+flights20 <- get_flights(c("SFO", "OAK","SJC"), 2020, c(1,2,3,4,5,6,7,8,9,10,11,12))
+it's ok to download most of the data, but has warning "Warning: One or more parsing issues, see `problems()` for details".
+However, when I tried to run the codes above, there's error:
+"Error in utils::download.file(fl_url, flight_temp, quiet = TRUE) : cannot open URL 'https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2020_1.zip'"
+So I can't download the flights data of 2020, and I will use 2019 data from Prof.Kerr.
+
+\newpage
+### 3. Once you have your data downloaded, develop your code for the first month of data. The last step will be to include all of the data and perform an overall analysis for 2020. The data includes all flights that departed from the Bay Area, including all flights departing from San Francisco (SFO), Oakland (OAK), and San Jose (SJC). How many departing flights were there in January 2020? How many departing flights were there from each airport in January 2020?
+
+```{r}
+flights19 <- readRDS("flights.Rds")
+airports19 <- readRDS("airports.Rds")
+airlines19 <- readRDS("airlines.Rds")
+planes19 <- readRDS("planes.Rds")
+weather19<- readRDS("weather.Rds")
+```
+
+```{r}
+flights19 %>%
+  filter(month=="1") %>% 
+  summarize(total = sum(flight))
+```
+\newpage
+### 4.Compare the variables that are available in the baflights19 flights data frame with the variables in the nycflights13 data frame. Make a table of the variables that are in both datasets, with a description of each variable (an abbreviated codebook). Hint: In RStudio see Help > RMarkdown Quick Reference > Tables. Report any differences in the variables.
+```{r}
+library(janitor)
+library(diffdf)
+all_equal(flights, flights19)
+compare_df_cols(flights,flights19, return = c("match"))
+```
+
+```{r}
+codebook <- matrix(c("Date of departure.", "Actual departure and arrival times (format HHMM or HMM), local tz.",
+                   "Scheduled departure and arrival times (format HHMM or HMM), local tz.", 
+                   "Departure and arrival delays, in minutes. Negative times represent early departures/arrivals.",
+                   "Two letter carrier abbreviation. See airlines to get name.",
+                   "Flight number.", "Plane tail number. See planes for additional metadata.", 
+                   "Origin and destination. See airports for additional metadata.",
+                   "Amount of time spent in the air, in minutes.", "Distance between airports, in miles."
+                   ,"Time of scheduled departure broken into hour and minutes.",
+                   "Scheduled date and hour of the flight as a POSIXct date. Along with origin, can be used to join flights data to weather data."), ncol = 1, byrow = TRUE)
+rownames(codebook) <- c("year, month, day", "dep_time, arr_time", "sched_dep_time, sched_arr_time",
+                        "dep_delay, arr_delay", "carrier", "flight", "tailnum", "origin, dest",
+                        "air_time", "distance", "hour, minute", "time_hour")
+colnames(codebook) <- c("description")
+codebook <- as.table(codebook)
+codebook
+```
+
+\newpage
+### 5.Answer Exercises 4.2, 4.3, 4.4 (you may only be able to answer part of 4.4) on page 89 of the book, changing nycflights13 to baflights19. Answer all the questions for the Bay Area in 2019.
+
+(a) 4.2
+Use the baflights19 package and the flights data frame to answer the following questions: What month had the highest proportion of cancelled ﬂights? What month had the lowest? Interpret any seasonal patterns.
+```{r}
+flights19 %>%
+  group_by(month) %>%
+  summarize(cancelled =  sum(is.na(arr_delay)),
+            total = n(),
+            prop = cancelled/total) %>%
+  arrange(desc(prop))
+```
+Answer: February had the highest proportion of cancelled flights. October had the lowest proportion of cancelled flights.
+Covid19 spreads in US from the beginning of 2020, many airports were closed and flights were cancelled. That's why January，February and March had the high cancellations of flights. 
+
+
+(b) 4.3 
+Use the baflights19 package and the flights data frame to answer the following question:  What plane(specified by the tailnum variable) traveled the most times from Bay area airports in 2019? Plot the number of trips per week over the year.
+```{r}
+flights19 %>% group_by(tailnum) %>% summarize(counts = n()) %>% arrange(desc(counts))
+```
+Answer: Since NA is not a plane, plane N521VA traveled the most time from Bay area airports(SFO, OAK, SJC) in 2019.
+
+```{r}
+flights19 %>%
+  filter(tailnum == "N521VA") %>%
+  mutate(date = ymd(sprintf("%04d%02d%02d", year, month, day))) %>%
+  mutate(week_counts = week(date)) %>% 
+  group_by(week_counts) %>%
+  summarize(travel_counts = n()) %>%
+  ggplot(aes(x = week_counts, y = travel_counts)) +
+  geom_point(color = "blue", size = 2) +
+  geom_line()+
+  labs(x = "Weeks in 2019", y = "Number of plane travels N521VA")
+```
+
+(c) 4.4
+Use the baflights19 package and the flights and planes tables to answer the following questions: What is the oldest plane(specified by the tailnum variable) that flew from Bay area airports in 2019? How many airplanes that flew from Bay area are included in the planes table?
+
+```{r}
+head(planes19)
+```
+
+```{r}
+planes19 %>% select(tailnum, year) %>% arrange(year) %>% head(1)
+```
+```{r}
+flights19 %>% filter(tailnum == "N990JB") 
+```
+
+
+```{r}
+BAYplanes_count <- flights19 %>% inner_join(planes, by = "tailnum") %>% group_by(tailnum) %>% summarize(counts = n()) 
+nrow(BAYplanes_count)
+```
+
+Answer: N990JB is the oldest plane, made by 1977, flew from Bay area airports in 2019. There are 1884 airplanes that flew from NYC are included in the planes table.
+
+\newpage
+### Part II
+### 1. Answer Exercises 4.6, and 4.7 for the Bay Area 2020 data. (Most of the questions asked cannot be answered due to the lack of data.)
+
+(a) 4.2 Use the baflights19 package and the flights data frame to answer the following questions: What month had the highest proportion of cancelled ﬂights? What month had the lowest? Interpret any seasonal patterns.
+```{r}
+flights1 <- flights19 %>%
+  group_by(month) %>%
+  summarize(cancelled = sum(is.na(arr_delay)),
+  total = n(),
+  prop_cancelled = cancelled/total)
+  ggplot(data=flights1, aes(x = month, y = prop_cancelled)) + geom_point() +
+  labs(title = "Proportion of Cancelled Flights Each Month",
+  y = "proportion cancelled")
+```
+
+(a) 4.6
+Use the baflights19 package and the weather table to answer the following questions: What is the distribution of temperature in July, 2019? Identify any important outliers in terms of the wind speed variable. What is the relationship between dewp and humid ? What is the relationship between precip and visib ?
+```{r}
+head(weather19)
+```
+
+```{r}
+tempe <- weather %>%
+  filter(month == "7") 
+ggplot(tempe, aes(x=temp)) +
+  geom_histogram(bins = 10) +
+  labs(x = "07/2019 Temperature", y = "Counts")
+```
+```{r}
+qqnorm(tempe$temp)
+qqline(tempe$temp)
+```
+
+
+
+```{r}
+summary(weather19$temp)
+sd(weather19$temp,na.rm = TRUE)
+```
+
+Answer: From the histogram, temperature in July of 2019 is closed to bell-curve shaped, with mean of 65.63 and standard deviation of 10.65267. QQ Plot indicates some deviation from normal distribution.
+
+```{r}
+boxplot(weather19$wind_speed, ylab= "wind speed")
+```
+
+```{r}
+summary(weather19$wind_speed)
+```
+
+From the boxplot of weather19$wind_speed, we know that there are some outliers.
+From the summary table of weather19$wind_speed, we know that Q3 is 12.659, and Q1 is 4.603. We can get IQR = Q3-Q1.
+Outliers are falling out of the Upper Fence and Lower Fence.
+```{r}
+Q3 <- 12.659
+Q1 <- 4.603
+IQR <- Q3 - Q1
+UF <- Q3 + 1.5 * IQR
+LF <- Q1 - 1.5 * IQR
+UF
+LF
+ws_outliers <- weather19 %>%
+  filter(wind_speed > UF | wind_speed< LF) 
+nrow(ws_outliers)
+ws_outliers %>% 
+  arrange(desc(wind_speed)) %>%
+  head(10)
+```
+
+Answer: There are 299 outliers of wind speed, and the first 10 is showed above in the table. We can see there's from the box plot and table that one outlier 41.42808 is extremely higher than others.
+
+```{r}
+weather19 %>%
+  filter(!is.na(temp) | !is.na(dewp) | !is.na(humid)) %>%
+  ggplot(aes(x = dewp, y = humid)) +
+  geom_point(size = 1) +
+  geom_smooth() +
+  labs(title = "Relationship between humid and dewp of 2019 Bay Area")
+```
+
+Answer: From the graph, there is a positive relationship between dewp and humid variables. When dewp increased, humid increased.
+
+
+
+
+(b) 4.7
+Use the baflights19 package and the weather table to answer the following questions: On how many days was there precipitation in the Bay area in 2019? Were there differences in the mean visibility (visib) based on the day of the week and/or month of the year?
+
+```{r}
+weather19 %>%
+  filter(!is.na(precip) | precip > 0) %>%
+  group_by(day) %>%
+  summarize(precip_sum = sum(precip)) %>%
+  nrow()
+```
+Answer: There are 30 days of precipitation in the Bay area in 2019.
+
+```{r}
+visib_month <- weather19 %>% 
+  filter(!is.na(visib)) %>% 
+  group_by(month) %>%
+  summarise(mean_mon_visib = sum(visib)/n()) %>%
+  arrange(desc(mean_mon_visib))
+visib_month
+visib_month %>% ggplot(aes(x = month, y = mean_mon_visib)) + geom_point() + geom_line() +
+  labs(x="months", y = "Visibility in miles")
+```
+
+
+```{r}
+visib_day_of_week <- weather19 %>%
+   mutate(day_of_week = weekdays(time_hour)) %>%
+  filter(!is.na(visib))%>%
+  group_by(day_of_week) %>%
+   summarise(mean_week_visib = sum(visib)/n()) %>%
+   arrange(desc(mean_week_visib))
+visib_day_of_week
+```
+
+```{r}
+visib_day_of_week %>%
+  ggplot(aes(x= day_of_week, y=mean_week_visib)) + geom_point() +
+  labs(x="day of week", y = "Visibility in miles")
+```
+
+Answer: from two table and plot of mean, November, December and Thursday had the worst Visibility in miles. Tuesday and October had the best Visibility in miles.
